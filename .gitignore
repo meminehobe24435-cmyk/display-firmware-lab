@@ -1,0 +1,18 @@
+# build products
+*.exe
+*.o
+*.out
+dfw_sim
+dfw_tests
+
+# generated simulation output
+results/
+*.csv
+!test/*.csv
+
+# scratch
+t.txt
+s.txt
+sim_out.txt
+test_out.txt
+asan*.txt

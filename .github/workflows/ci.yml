@@ -1,0 +1,73 @@
+name: ci
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-and-test:
+    name: ${{ matrix.os }} / ${{ matrix.cc }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu-latest, macos-latest ]
+        cc: [ gcc, clang ]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compiler versions
+        run: |
+          ${{ matrix.cc }} --version | head -n 1
+          make --version | head -n 1
+
+      - name: Build (strict)
+        env:
+          CC: ${{ matrix.cc }}
+        run: make CFLAGS="-std=c99 -O2 -Wall -Wextra -Wpedantic -Werror -ffp-contract=off"
+
+      - name: Test
+        env:
+          CC: ${{ matrix.cc }}
+        run: |
+          make test CFLAGS="-std=c99 -O2 -Wall -Wextra -Wpedantic -Werror -ffp-contract=off" > test_out.txt 2>&1
+          tail -n 20 test_out.txt
+
+      - name: Simulation
+        env:
+          CC: ${{ matrix.cc }}
+        run: |
+          make sim CFLAGS="-std=c99 -O2 -Wall -Wextra -Wpedantic -Werror -ffp-contract=off" > sim_out.txt 2>&1
+          tail -n 30 sim_out.txt
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: results-${{ matrix.os }}-${{ matrix.cc }}
+          path: |
+            results/
+            test_out.txt
+            sim_out.txt
+          if-no-files-found: warn
+
+  sanitizers:
+    name: ubuntu-latest / clang ASan+UBSan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build with ASan + UBSan
+        env:
+          CC: clang
+        run: |
+          make test CFLAGS="-std=c99 -O1 -g -Wall -Wextra -Werror -ffp-contract=off -fsanitize=address,undefined -fno-omit-frame-pointer" > asan_build.txt 2>&1
+          tail -n 20 asan_build.txt
+
+      - name: Run under sanitizers
+        run: |
+          ASAN_OPTIONS=detect_leaks=1 UBSAN_OPTIONS=print_stacktrace=1 ./dfw_tests > asan.txt 2>&1
+          tail -n 15 asan.txt
