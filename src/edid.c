@@ -652,13 +652,20 @@ static void build_desc_header(uint8_t *b, uint8_t tag)
 
 static void copy_padded(uint8_t *dst, const char *src)
 {
-    size_t i;
-    for (i = 0; i < 13; ++i)
-        dst[i] = (uint8_t)((src && src[i]) ? src[i] : ' ');
-    if (src) {
-        size_t n = strlen(src);
-        if (n < 13) dst[n] = '\n';   /* EDID strings are newline terminated */
+    size_t i, n = 0;
+    /* Measure first, then copy exactly n bytes.  The previous version read
+     * src[i] for all 13 slots and only used it when non-zero -- which reads
+     * past the terminating NUL of any shorter string literal.  ASan caught it
+     * as a global-buffer-overflow (see README "pitfalls"); it is harmless on
+     * most targets and silently wrong on all of them. */
+    if (src != NULL) {
+        n = strlen(src);
+        if (n > 13) n = 13;
     }
+    for (i = 0; i < 13; ++i) {
+        dst[i] = (i < n) ? (uint8_t)src[i] : (uint8_t)' ';
+    }
+    if (n < 13) dst[n] = '\n';   /* EDID strings are newline terminated */
 }
 
 void dfw_edid_build_desc_name(uint8_t *b, const char *name)
